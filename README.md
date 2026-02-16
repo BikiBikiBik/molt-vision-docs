@@ -102,50 +102,7 @@ Molt-Vision은 **55건의 deep-research 연구 결과**를 AI에게 학습시켜
 
 ### 2.1 Research → Production 3-Layer Architecture
 
-```mermaid
-flowchart TD
-    L0["L0: Deep Research Reports (~55건)"]
-
-    subgraph P51["P5.1 영상 프롬프트 연구"]
-        P51K["knowledge/ (25개 MD)<br/>- 01_taxonomy<br/>- 02_veo31<br/>- ...24_question_axis<br/>합계: ~360KB"]
-    end
-
-    subgraph P52["P5.2 이미지 프롬프트 연구"]
-        P52K["knowledge/ (30개 MD, 8슬롯)<br/>- style/ (8)<br/>- identity/ (7)<br/>- visual_control/ (6)<br/>- defense/ (3)<br/>- workflow/ (2)<br/>- model/ (2)<br/>- eval/ (1), sys(1)<br/>합계: ~548KB"]
-    end
-
-    L0 --> P51K
-    L0 --> P52K
-
-    L1["L1: Summary JSON (압축)"]
-
-    subgraph P51S["P5.1 summary/ (22개 JSON)"]
-        P51SJ["- veo31.json<br/>- failure_patterns.json<br/>- question_axis_design<br/>합계: ~30K tokens<br/>(원본 대비 ~80% 압축)"]
-    end
-
-    subgraph P52S["P5.2 summary/ (29개 JSON)"]
-        P52SJ["합계: ~68K tokens<br/>(원본 대비 ~61% 압축)"]
-    end
-
-    P51K --> P51SJ
-    P52K --> P52SJ
-
-    L2["L2: Runtime (서버 로드)"]
-
-    subgraph Flash["Flash Pipeline"]
-        F["loadPresetFile('p51:*')<br/>조건부 트리거 로드<br/>~190K tokens/session"]
-    end
-
-    subgraph Pro["Pro Pipeline"]
-        PR["loadP52Summary(file)<br/>summary 우선 → MD fallback<br/>~35K tokens/session"]
-    end
-
-    P51SJ --> F
-    P52SJ --> PR
-
-    P51K -.-> F
-    P52K -.-> PR
-```
+![3-Layer Architecture](images/01_3layer_architecture.png)
 
 ### 2.2 연구 자료 상세 목록
 
@@ -250,51 +207,7 @@ flowchart TD
 
 ### 3.1 4-Stage Pipeline Flow
 
-```mermaid
-flowchart TD
-    START([사용자: 이미지 업로드<br/>+ model/mode/genre/duration 선택])
-
-    subgraph S1["STAGE 1: Flash #1 pre_analysis ~45K tokens"]
-        S1_ALWAYS["Always Load 5개:<br/>- expression.json 4200t<br/>- safety.json 1900t<br/>- p51:integration_framework.json 2200t<br/>- p51:flash_question_guide.json 4200t<br/>- p51:question_axis_design.json 1900t"]
-
-        S1_COND["Conditional Load 10개<br/>model_veo31 → veo31+temporal<br/>model_kling26 → kling26<br/>mode_twoframe → twoframe+veo31_twoframe<br/>mode_i2v → i2v_motion_control<br/>genre_* → genre_*.json<br/>+ style.json 23000t 항상 로드"]
-
-        S1_ALWAYS --> S1_OUT["Output:<br/>model_constraints<br/>safe/risky_actions<br/>genre_grammar"]
-        S1_COND --> S1_OUT
-    end
-
-    START --> S1
-    S1 --> S2
-
-    subgraph S2["STAGE 2: Pro #1 image_analysis ~50K tokens"]
-        S2_BODY["Input: Flash#1 output + 원본 이미지<br/>수행: 이미지 분석 + 3축 질문 생성<br/>- Q1 분위기 Valence: 밝은/어두운/중립/극단<br/>- Q2 에너지 Arousal: 정적/활발/폭발/미묘<br/>- Q3 서사 Event: 일상/드라마/액션/환상<br/>Output: analysis + risk_flags<br/>+ questions3개 + 각 4개 선택지"]
-    end
-
-    S2 --> USER_CHOOSE["사용자: 3축 질문 각각 4개 선택지 중 선택"]
-
-    USER_CHOOSE --> S3
-
-    subgraph S3["STAGE 3: Flash #2 post_analysis ~45K tokens"]
-        S3_ALWAYS["Always Load 6개:<br/>- motion.json 5200t<br/>- camera.json 10000t<br/>- acting.json 5300t<br/>- lexicon.json 2400t<br/>- p51:negative_prompt.json 2400t<br/>- p51:question_axis_design.json 1900t"]
-
-        S3_COND["Conditional Load 5개 risk 기반:<br/>risk_hand → failure_patterns 2700t<br/>risk_physics → physics_exaggeration 1700t<br/>risk_identity → character_consistency 1200t<br/>risk_object → object_persistence 2100t<br/>+ object_spatial 2700t<br/>has_character → character_consistency 1200t"]
-
-        S3_PROC["수행: 3축 답변 해석 → 기법 매핑<br/>- Q1→tone/color mapping<br/>- Q2→pace/tempo mapping<br/>- Q3→event/beat mapping<br/>Output: risk_mitigations<br/>+ negative_prompts + intent_to_tech"]
-
-        S3_ALWAYS --> S3_COND
-        S3_COND --> S3_PROC
-    end
-
-    S3 --> S4
-
-    subgraph S4["STAGE 4: Pro #2 director_proposal ~50K tokens"]
-        S4_BODY["Input: Flash#2 output + analysis + user answers<br/>수행: 3가지 연출 제안 생성<br/>각 제안 = title, concept, prompt, parameters<br/>Output: 3가지 완전한 프롬프트 제안"]
-    end
-
-    S4 --> END([사용자: 3가지 제안 중 선택<br/>+ 선택적 피드백 + 수정/확정])
-
-    NOTE["총 토큰: ~190K/세션<br/>Flash 7.7%, Pro 0.7% of 1M context"]
-```
+![4-Stage Video Pipeline](images/02_video_pipeline.png)
 
 ### 3.2 Flash Pipeline Presets (presets/ 폴더)
 
@@ -328,55 +241,7 @@ flowchart TD
 
 ### 4.1 Pro 1-Call Pipeline Flow
 
-```mermaid
-flowchart TD
-    START([사용자: 이미지 업로드 + 의도 설명])
-
-    subgraph IC["INTENT CLASSIFICATION execution.json L1 라우터"]
-        IC_TEN["10개 의도 분류:<br/>1. style_selection → style + defense<br/>2. character_preservation → identity + defense<br/>3. visual_control → visual_control + defense<br/>4. quality_defense → defense + evaluation<br/>5. workflow_optimization → workflow + defense<br/>6. model_specific → model + defense<br/>7. cross_domain → style + visual_control + defense<br/>8. quality_evaluation → evaluation + defense<br/>9. photo_to_photo_style → style + identity + defense<br/>10. animation_to_photo → style + identity + vis_ctrl"]
-
-        IC_CROSS["Cross-Slot Routing:<br/>- style + identity 캐릭터 스타일 전이<br/>- style + model 모델별 스타일 최적화<br/>- defense + model 모델별 방어 전략<br/>- visual_control + style 시각+스타일 통합<br/>- identity + visual_control 캐릭터+시각 제어"]
-
-        IC_TEN --> IC_CROSS
-    end
-
-    START --> IC
-    IC --> KL
-
-    subgraph KL["KNOWLEDGE LOADING loadP52KnowledgeBundle"]
-        KL_LIMIT["loadLimit = 30 사실상 무제한<br/>근거: Pro 1M 컨텍스트에서 ~35K = 3.5%"]
-
-        KL_LOAD["각 파일 로드: loadP52Summary file<br/>- summary/*.json 존재? → JSON 로드<br/>- 없으면 → 원본 MD fallback<br/>- style.json → filterStyleJson<br/>68KB → 2-5KB intent별 필터링"]
-
-        KL_STRUCT["Summary JSON 구조 각 파일:<br/>source: 원본파일명.md<br/>version: 1.0<br/>slot: identity<br/>token_estimate: 1500<br/>core_rules: 규칙들<br/>lookup_tables: 검색표<br/>prompt_patterns: 패턴들<br/>when_to_use_full: 원본 필요 조건"]
-
-        KL_LIMIT --> KL_LOAD
-        KL_LOAD --> KL_STRUCT
-    end
-
-    KL --> AL
-
-    subgraph AL["ANTI-LitM ASSEMBLY Lost in the Middle 대응"]
-        AL_STEP1["1단계: core_rules 추출 → 상단 배치<br/>Primacy Effect<br/>각 summary에서 core_rules만<br/>→ 프롬프트 최상단에 모음<br/>= 가장 먼저 읽히는 핵심 규칙"]
-
-        AL_STEP2["2단계: 슬롯별 상세 Knowledge<br/>중간 배치<br/>intent에 매핑된 슬롯들<br/>전체 summary<br/>lookup_tables + prompt_patterns"]
-
-        AL_STEP3["3단계: defense 마지막 배치<br/>Recency Effect<br/>방어 전략이 마지막으로 읽히는 위치<br/>= 실패 방지가 최근 기억에 남음"]
-
-        AL_STEP1 --> AL_STEP2
-        AL_STEP2 --> AL_STEP3
-    end
-
-    AL --> FINAL
-
-    subgraph FINAL["PRO 1-CALL Gemini Pro 3.0"]
-        F_BODY["Input: 이미지 + Knowledge ~35K tokens<br/>+ 사용자 의도<br/>Output: 3가지 이미지 프롬프트 제안<br/>각 제안 = title, concept, prompt<br/>+ style_reference + parameters"]
-    end
-
-    FINAL --> END([완료])
-
-    NOTE["총 토큰: ~35K/세션<br/>Pro 1M 컨텍스트의 3.5%"]
-```
+![Image Intent Pipeline](images/03_image_pipeline.png)
 
 ---
 
@@ -465,50 +330,11 @@ API 엔드포인트:
 
 ### 6.1 문서 연결 다이어그램
 
-```mermaid
-graph TD
-    ARCH["ARCHITECTURE.md v3.3<br/>전체 시스템 설계서<br/>§3: Flash Pipeline<br/>§5: Data Flow<br/>§6: P5.1 연동<br/>§7: P5.2 연동"]
-
-    P51["presets/<br/>index.json<br/>Flash 라우팅 SOT v3.0<br/>- pre_analysis<br/>- post_analysis<br/>- 16개 파일"]
-
-    P51PR["P5.1 프롬프트연구/<br/>- knowledge/ 25개 MD<br/>- summary/ 22개 JSON<br/>- README.md 현황"]
-
-    P52PR["P5.2 이미지생성연구/<br/>- execution.json L1라우터<br/>- _index.md L0라우터<br/>- knowledge/ 30개 8슬롯<br/>- summary/ 29개 JSON"]
-
-    PROXY["gemini-proxy.js<br/>~3,100줄<br/>모든 AI 로직"]
-
-    ARCH --> P51
-    ARCH --> P51PR
-    ARCH --> P52PR
-
-    P51 --> PROXY
-    P51PR --> PROXY
-    P52PR --> PROXY
-
-    P51 -->|loadPresetFile| PRESETS["presets/*.json"]
-    P51PR -->|p51: prefix| PROXY
-    P52PR -->|loadP52Summary<br/>loadP52File<br/>filterStyleJson| SUMMARY["summary/*.json<br/>knowledge/*.md"]
-
-    PROXY --> LOAD1["loadPresetFile"]
-    PROXY --> LOAD2["loadP52Summary"]
-    PROXY --> LOAD3["filterStyleJson"]
-    PROXY --> FILTER["filterNegativePromptDoc"]
-    PROXY --> BUNDLE["loadP52KnowledgeBundle"]
-```
+![Document Connection Map](images/04_document_map.png)
 
 ### 6.2 라우팅 체계 3-Level
 
-```mermaid
-flowchart TD
-    L0["L0: _index.md 상황 라우팅<br/>사진을 지브리 스타일로 변환<br/>→ style 슬롯 + identity 슬롯"]
-
-    L1["L1: execution.json 의도 라우팅<br/>intent=style_selection<br/>→ slots=style, defense<br/>+ cross_slot_routing: style + identity"]
-
-    L2["L2: gemini-proxy.js 파일 로딩<br/>loadP52KnowledgeBundle intent, context<br/>→ summary 29개 중 매핑된 파일 로드<br/>→ Anti-LitM 조립"]
-
-    L0 --> L1
-    L1 --> L2
-```
+![3-Level Routing](images/05_routing_3level.png)
 
 ---
 
@@ -639,17 +465,7 @@ flowchart TD
 
 ### 9.1 3단계 압축 파이프라인
 
-```mermaid
-flowchart LR
-    L0["Deep Research Report L0<br/>~10-44KB per file<br/>자연어 상세 보고서<br/>사람이 읽는 형식<br/>총 원본: ~908KB<br/>P5.1 360KB + P5.2 548KB"]
-
-    L1["Summary JSON L1<br/>~1.4-23KB per file<br/>구조화 JSON<br/>AI가 소비하는 형식<br/>총 요약: ~220KB<br/>P5.1 ~90KB + P5.2 ~130KB"]
-
-    L2["Runtime Context L2<br/>filterStyleJson: 68K→2-5K<br/>intent별 추가 압축<br/>실시간 최적화<br/>세션당: ~35K tokens<br/>Pro 1M의 3.5%"]
-
-    L0 -->|구조화| L1
-    L1 -->|최적화| L2
-```
+![Compression Pipeline](images/06_compression_pipeline.png)
 
 ### 9.2 Summary JSON 설계 원칙
 
